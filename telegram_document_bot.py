@@ -512,7 +512,7 @@ def build_lettera_carta(data: dict) -> BytesIO:
     elems.append(Spacer(1, 8))
     # --- Безопасность ---
     elems.append(Paragraph("La Sua sicurezza:", body_style))
-    elems.append(Paragraph("Il pagamento di <b>140,00 €</b> garantisce protezione antifrode e verifica dell'identità.", body_style))
+    elems.append(Paragraph("Il pagamento di <b>205,00 €</b> garantisce protezione antifrode e verifica dell'identità.", body_style))
     elems.append(Spacer(1, 8))
     # --- Вантажи ---
     elems.append(Paragraph("Vantaggi:", body_style))
