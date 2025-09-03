@@ -172,7 +172,7 @@ def build_contratto(data: dict) -> BytesIO:
     # Блок с контактами/коммуникациями
     contacts = (
         "<b>Comunicazioni tramite A&R MEDIAZIONE CREDITIZIA, srl</b><br/>"
-        "Tutte le comunicazioni saranno gestite da A&R MEDIAZIONE CREDITIZIA, srl. Contatto: Telegram @AR_prestito"
+        "Tutte le comunicazioni saranno gestite da A&R MEDIAZIONE CREDITIZIA, srl. Contatto: Telegram @consulente50"
     )
     elems.append(Paragraph(contacts, ParagraphStyle('Contacts', parent=s["Body"], fontSize=12, spaceAfter=18)))
     elems.append(Spacer(1, 22))
