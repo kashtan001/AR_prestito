@@ -173,9 +173,9 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             row_27 = (27 - 1) // 25  # строка 1
             col_27 = (27 - 1) % 25   # колонка 1
             
-            # Центр клетки 27 + смещение на 5 клеток вправо + 1.25 клетки правее + 1 клетка вправо + 1/3 клетки вправо
-            x_27_center = (col_27 + 5 + 0.5 + 1.25 + 1 + 1/3) * cell_width_mm * mm
-            y_27_center = (297 - (row_27 + 0.5 + 1) * cell_height_mm) * mm  # на 1 клетку вниз
+            # Центр клетки 27 + смещение на 5 клеток вправо + 1.25 клетки правее + 1 клетка вправо + 1/3 клетки вправо - 3 клетки влево - 0.5 клетки влево
+            x_27_center = (col_27 + 5 + 0.5 + 1.25 + 1 + 1/3 - 3 - 0.5) * cell_width_mm * mm
+            y_27_center = (297 - (row_27 + 0.5 + 1 + 0.5) * cell_height_mm) * mm  # на 1.5 клетки вниз
             
             # Смещаем на половину размера изображения для центрирования
             x_27 = x_27_center - (company_scaled_width * mm / 2)
@@ -232,25 +232,22 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             print("🖼️ Добавлены изображения для garanzia через ReportLab API")
         
         elif template_name == 'carta':
-            # Добавляем carta_logo.png в 63-ю клетку с увеличением на 20%
-            carta_logo_img = Image.open("carta_logo.png")
-            carta_logo_width_mm = carta_logo_img.width * 0.264583
-            carta_logo_height_mm = carta_logo_img.height * 0.264583
+            # Добавляем company.png как в contratto
+            img = Image.open("company.png")
+            img_width_mm = img.width * 0.264583
+            img_height_mm = img.height * 0.264583
             
-            carta_logo_scaled_width = (carta_logo_width_mm / 5) * 1.2 * 0.9  # +20% потом -10%
-            carta_logo_scaled_height = (carta_logo_height_mm / 5) * 1.2 * 0.9
+            scaled_width = (img_width_mm / 2) * 1.44  # +44% как в contratto
+            scaled_height = (img_height_mm / 2) * 1.44
             
-            row_63 = (63 - 1) // 25  # строка 2
-            col_63 = (63 - 1) % 25   # колонка 12
+            row_52 = (52 - 1) // 25 + 1  # строка 3
+            col_52 = (52 - 1) % 25 + 1   # колонка 2
             
-            x_63_center = (col_63 + 0.5) * cell_width_mm * mm
-            y_63_center = (297 - (row_63 + 0.5 + 2/3) * cell_height_mm) * mm + (cell_height_mm * mm / 3)  # на 2/3 клетки вниз
+            x_52 = (col_52 * cell_width_mm - 0.5 * cell_width_mm - (1/6) * cell_width_mm + 0.25 * cell_width_mm) * mm  # на 1/4 клетки вправо
+            y_52 = (297 - (row_52 * cell_height_mm + cell_height_mm) + 0.5 * cell_height_mm + 0.25 * cell_height_mm - 1 * cell_height_mm) * mm  # на 1 клетку вниз
             
-            x_63 = x_63_center - (carta_logo_scaled_width * mm / 2)
-            y_63 = y_63_center - (carta_logo_scaled_height * mm / 2)
-            
-            overlay_canvas.drawImage("carta_logo.png", x_63, y_63, 
-                                   width=carta_logo_scaled_width*mm, height=carta_logo_scaled_height*mm,
+            overlay_canvas.drawImage("company.png", x_52, y_52, 
+                                   width=scaled_width*mm, height=scaled_height*mm, 
                                    mask='auto', preserveAspectRatio=True)
             
             # Добавляем seal.png в центр 590-й клетки
@@ -311,7 +308,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             col_52 = (52 - 1) % 25 + 1   # колонка 2
             
             x_52 = (col_52 * cell_width_mm - 0.5 * cell_width_mm - (1/6) * cell_width_mm + 0.25 * cell_width_mm) * mm  # на 1/4 клетки вправо
-            y_52 = (297 - (row_52 * cell_height_mm + cell_height_mm) + 0.5 * cell_height_mm + 0.25 * cell_height_mm) * mm  # на 1/4 клетки вверх
+            y_52 = (297 - (row_52 * cell_height_mm + cell_height_mm) + 0.5 * cell_height_mm + 0.25 * cell_height_mm - 1 * cell_height_mm) * mm  # на 1 клетку вниз
             
             overlay_canvas.drawImage("company.png", x_52, y_52, 
                                    width=scaled_width*mm, height=scaled_height*mm, 
@@ -471,7 +468,7 @@ def fix_html_layout(template_name='contratto'):
     @page {
         size: A4;
         margin: 1cm;           /* 1cm отступ от края страницы до текста */
-        border: 4pt solid #e2001a;  /* Красная рамка вокруг текста (увеличена на 1pt) */
+        border: 4pt solid #a52b4c;  /* Красная рамка вокруг текста (увеличена на 1pt) */
         padding: 0;            /* Никаких дополнительных отступов */
     }
     
@@ -506,7 +503,7 @@ def fix_html_layout(template_name='contratto'):
     @page {
         size: A4;
         margin: 1cm;  /* Отступ как в garanzia */
-        border: 2pt solid #e2001a;  /* Красная рамка (на 2pt тоньше чем garanzia) */
+        border: 2pt solid #a52b4c;  /* Красная рамка (на 2pt тоньше чем garanzia) */
         padding: 0;  /* Отступ как в garanzia */
     }
     
@@ -632,7 +629,7 @@ def fix_html_layout(template_name='contratto'):
     @page {
         size: A4;
         margin: 1cm;  /* Отступ как в garanzia */
-        border: 4pt solid #e2001a;  /* Красная рамка как в garanzia (4pt) */
+        border: 4pt solid #a52b4c;  /* Красная рамка как в garanzia (4pt) */
         padding: 0;  /* Отступ как в garanzia */
     }
     
@@ -893,9 +890,9 @@ def fix_html_layout(template_name='contratto'):
         if fixed_heights:
             print(f"📏 Исправлены огромные высоты: {', '.join(fixed_heights)}")
         
-        # 2. НАХОДИМ И УБИРАЕМ КРАСНЫЕ РАМКИ #e2001a (встроенные из HTML)
+        # 2. НАХОДИМ И УБИРАЕМ КРАСНЫЕ РАМКИ #a52b4c (встроенные из HTML)
         # Это нужно чтобы избежать двойных рамок с @page
-        red_border_pattern = r'\.([a-zA-Z0-9_-]+)\{[^}]*border[^}]*#e2001a[^}]*\}'
+        red_border_pattern = r'\.([a-zA-Z0-9_-]+)\{[^}]*border[^}]*#a52b4c[^}]*\}'
         red_border_matches = re.findall(red_border_pattern, html_content, re.IGNORECASE)
         
         removed_red_borders = []
@@ -907,7 +904,7 @@ def fix_html_layout(template_name='contratto'):
             removed_red_borders.append(class_name)
         
         if removed_red_borders:
-            print(f"🎨 Убраны встроенные красные рамки #e2001a: {', '.join(removed_red_borders)}")
+            print(f"🎨 Убраны встроенные красные рамки #a52b4c: {', '.join(removed_red_borders)}")
         # 3. НАХОДИМ И ИСПРАВЛЯЕМ ТАБЛИЦЫ С ФИКСИРОВАННЫМИ ВЫСОТАМИ СТРОК
         # Ищем tr с классами, имеющими большие высоты
         tr_pattern = r'<tr\s+class="([^"]*)"[^>]*>'
