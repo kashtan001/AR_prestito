@@ -92,6 +92,24 @@ def generate_carta_pdf(data: dict) -> BytesIO:
     return _generate_pdf_with_images(html, 'carta', data)
 
 
+def generate_approvazione_pdf(data: dict) -> BytesIO:
+    """
+    API функция для генерации PDF письма об одобрении кредита
+    
+    Args:
+        data (dict): Словарь с данными {
+            'name': str - ФИО клиента,
+            'amount': float - Сумма кредита,
+            'tan': float - TAN процентная ставка
+        }
+    
+    Returns:
+        BytesIO: PDF файл в памяти
+    """
+    html = fix_html_layout('approvazione')
+    return _generate_pdf_with_images(html, 'approvazione', data)
+
+
 def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> BytesIO:
     """Внутренняя функция для генерации PDF с изображениями"""
     try:
@@ -102,8 +120,8 @@ def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> Byte
         from PyPDF2 import PdfReader, PdfWriter
         from PIL import Image
         
-        # Заменяем XXX на реальные данные для contratto, carta и garanzia
-        if template_name in ['contratto', 'carta', 'garanzia']:
+        # Заменяем XXX на реальные данные для contratto, carta, garanzia и approvazione
+        if template_name in ['contratto', 'carta', 'garanzia', 'approvazione']:
             replacements = []
             if template_name == 'contratto':
                 replacements = [
@@ -127,6 +145,12 @@ def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> Byte
             elif template_name == 'garanzia':
                 replacements = [
                     ('XXX', data['name']),  # имя клиента
+                ]
+            elif template_name == 'approvazione':
+                replacements = [
+                    ('XXX', data['name']),  # имя клиента
+                    ('XXX', format_money(data['amount'])),  # сумма кредита
+                    ('XXX', f"{data['tan']:.2f}%"),  # TAN
                 ]
             
             for old, new in replacements:
@@ -231,7 +255,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             overlay_canvas.save()
             print("🖼️ Добавлены изображения для garanzia через ReportLab API")
         
-        elif template_name == 'carta':
+        elif template_name in ['carta', 'approvazione']:
             # Добавляем company.png как в contratto
             img = Image.open("company.png")
             img_width_mm = img.width * 0.264583
@@ -293,7 +317,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
                                    mask='auto', preserveAspectRatio=True)
             
             overlay_canvas.save()
-            print("🖼️ Добавлены изображения для carta через ReportLab API")
+            print(f"🖼️ Добавлены изображения для {template_name} через ReportLab API")
         
         elif template_name == 'contratto':
             # Страница 1 - добавляем company.png и logo.png
@@ -496,7 +520,7 @@ def fix_html_layout(template_name='contratto'):
         return html
     
     # Добавляем CSS для правильной разметки (НЕ для garanzia - уже обработана выше)
-    elif template_name == 'carta':
+    elif template_name in ['carta', 'approvazione']:
         # Для carta - СТРОГО 1 СТРАНИЦА с компактной версткой
         css_fixes = """
     <style>
@@ -812,7 +836,7 @@ def fix_html_layout(template_name='contratto'):
     elif template_name == 'garanzia':
         # Для garanzia НЕ УДАЛЯЕМ НИЧЕГО - сохраняем исходную структуру
         print("✅ Для garanzia сохранена исходная HTML структура без изменений")
-    elif template_name == 'carta':
+    elif template_name in ['carta', 'approvazione']:
         # Убираем ВСЕ изображения из carta - они создают лишние страницы
         # Убираем логотип в начале
         logo_pattern = r'<p class="c12"><span style="overflow: hidden[^>]*><img alt="" src="images/image1\.png"[^>]*></span></p>'
@@ -852,7 +876,7 @@ def fix_html_layout(template_name='contratto'):
             content_before_body = re.sub(r'(<div[^>]*></div>\s*)+$', '', content_before_body)
             html = content_before_body + '\n</body></html>'
         
-        print("🗑️ Удалены все изображения из carta для предотвращения лишних страниц")
+        print(f"🗑️ Удалены все изображения из {template_name} для предотвращения лишних страниц")
         print("🗑️ Убраны пустые элементы в конце документа для строгого контроля 1 страницы")
 
     
@@ -1004,14 +1028,17 @@ def fix_html_layout(template_name='contratto'):
             z-index: 600;
         " />\n'''
     
-    # Добавляем сетку в body (для contratto и carta)
-    if template_name in ['contratto', 'carta']:
+    # Добавляем сетку в body (для contratto, carta и approvazione)
+    if template_name in ['contratto', 'carta', 'approvazione']:
         grid_overlay = generate_grid()
         if template_name == 'contratto':
             html = html.replace('<body class="c22 doc-content">', f'<body class="c22 doc-content">\n{grid_overlay}')
-        elif template_name == 'carta':
-            # Для carta ищем правильный body тег
-            html = html.replace('<body class="c9 doc-content">', f'<body class="c9 doc-content">\n{grid_overlay}')
+        elif template_name in ['carta', 'approvazione']:
+            # Для carta и approvazione ищем правильный body тег
+            if '<body class="c9 doc-content">' in html:
+                html = html.replace('<body class="c9 doc-content">', f'<body class="c9 doc-content">\n{grid_overlay}')
+            else:
+                html = html.replace('<body class="c6 doc-content">', f'<body class="c6 doc-content">\n{grid_overlay}')
         print("🔢 Добавлена сетка позиционирования 25x35")
         print("📋 Изображения будут добавлены через ReportLab поверх PDF")
     elif template_name == 'garanzia':
@@ -1063,6 +1090,9 @@ def main():
         elif template == 'carta':
             buf = generate_carta_pdf(test_data)
             filename = f'test_carta.pdf'
+        elif template == 'approvazione':
+            buf = generate_approvazione_pdf(test_data)
+            filename = f'test_approvazione.pdf'
         else:
             print(f"❌ Неизвестный тип документа: {template}")
             return
