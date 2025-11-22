@@ -106,7 +106,7 @@ async def ask_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     dt = context.user_data['doc_type']
     
     # Для approvazione сразу запрашиваем TAN
-    if dt == '/approvazione':
+    if dt in ('/approvazione', '/одобрение'):
         await update.message.reply_text(f"Inserisci TAN (%), enter per {DEFAULT_TAN}%:")
         return ASK_TAN
     
@@ -134,7 +134,7 @@ async def ask_tan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     dt = context.user_data['doc_type']
     
     # Для approvazione не запрашиваем TAEG - сразу генерируем документ
-    if dt == '/approvazione':
+    if dt in ('/approvazione', '/одобрение'):
         d = context.user_data
         try:
             buf = build_lettera_approvazione(d)
