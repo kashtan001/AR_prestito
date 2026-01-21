@@ -7,8 +7,6 @@ PDF Constructor API для генерации документов Intesa Sanpao
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-import os
-import base64
 
 # Импортируем типы для аннотаций
 from typing import List, Dict, Any
@@ -34,14 +32,50 @@ def monthly_payment(amount: float, months: int, annual_rate: float) -> float:
     return round(num / den, 2)
 
 
-def generate_payment_schedule_table(amount: float, months: int, annual_rate: float, payment: float) -> str:
-    """
-    Генерирует HTML таблицу графика платежей (амортизационную таблицу) для пункта 6.
-    Вставляется в HTML на место <!-- PAYMENT_SCHEDULE_TABLE_PLACEHOLDER -->.
-    """
-    monthly_rate = (annual_rate / 100) / 12
+def calculate_amortization_schedule(amount: float, months: int, rate: float) -> List[Dict[str, Any]]:
+    """Расчет графика погашения"""
+    schedule = []
+    balance = amount
+    monthly_rate = (rate / 100) / 12
+    payment = monthly_payment(amount, months, rate)
+    
+    for i in range(1, months + 1):
+        interest = balance * monthly_rate
+        principal = payment - interest
+        
+        # Корректировка последнего платежа
+        if i == months:
+            principal = balance
+            payment = principal + interest
+        
+        balance -= principal
+        if balance < 0.01: balance = 0
+        
+        schedule.append({
+            'month': i,
+            'payment': payment,
+            'interest': interest,
+            'principal': principal,
+            'balance': balance
+        })
+    return schedule
 
-    table_html = """
+
+def generate_amortization_html(schedule: List[Dict[str, Any]]) -> str:
+    """Генерация HTML таблицы амортизации"""
+    rows = ""
+    for item in schedule:
+        rows += f"""
+<tr class="c7">
+<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: center;"><span class="c3">{item['month']}</span></td>
+<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {format_money(item['payment'])}</span></td>
+<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {format_money(item['interest'])}</span></td>
+<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {format_money(item['principal'])}</span></td>
+<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {format_money(item['balance'] if item['balance'] > 0 else 0)}</span></td>
+</tr>
+"""
+    
+    table = f"""
 <table class="c18" style="width: 100%; border-collapse: collapse; margin: 10pt 0;">
 <tr class="c7">
 <td class="c4" style="border: 1pt solid #666666; padding: 5pt; text-align: center; font-weight: 700;"><span class="c3">Mese</span></td>
@@ -50,51 +84,22 @@ def generate_payment_schedule_table(amount: float, months: int, annual_rate: flo
 <td class="c4" style="border: 1pt solid #666666; padding: 5pt; text-align: center; font-weight: 700;"><span class="c3">Capitale</span></td>
 <td class="c4" style="border: 1pt solid #666666; padding: 5pt; text-align: center; font-weight: 700;"><span class="c3">Residuo</span></td>
 </tr>
+{rows}
+</table>
 """
-
-    remaining = float(amount)
-    for month in range(1, months + 1):
-        interest = remaining * monthly_rate
-        principal = payment - interest
-
-        # Последний платёж — корректируем, чтобы остаток стал 0
-        if month == months:
-            principal = remaining
-            interest = payment - principal
-            remaining = 0.0
-        else:
-            remaining = remaining - principal
-
-        interest = round(interest, 2)
-        principal = round(principal, 2)
-        remaining = round(remaining, 2)
-
-        payment_str = format_money(payment)
-        interest_str = format_money(interest)
-        principal_str = format_money(principal)
-        balance_str = format_money(remaining) if remaining > 0 else "0,00"
-
-        table_html += f"""
-<tr class="c7">
-<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: center;"><span class="c3">{month}</span></td>
-<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {payment_str}</span></td>
-<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {interest_str}</span></td>
-<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {principal_str}</span></td>
-<td class="c5" style="border: 1pt solid #666666; padding: 3pt; text-align: right;"><span class="c9 c8">&euro; {balance_str}</span></td>
-</tr>
-"""
-
-    table_html += "</table>"
-    return table_html
+    return table
 
 
 def generate_signatures_table() -> str:
     """
     Генерирует две наложенные друг на друга таблицы:
-    1) Таблица с подписями (sing_1.png и sing_2.png)
-    2) Таблица с печатями (seal.png), наложенная со смещением
+    1) Таблица с печатью (seal.png) в первой колонке
+    2) Таблица с подписями (sing_1.png и sing_2.png) - сдвинута вправо
     Изображения встраиваются как base64 для гарантированной загрузки в weasyprint.
     """
+    import os
+    import base64
+
     base_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
 
     def image_to_base64(filename: str) -> str | None:
@@ -158,6 +163,10 @@ def generate_contratto_pdf(data: dict) -> BytesIO:
     if 'payment' not in data:
         data['payment'] = monthly_payment(data['amount'], data['duration'], data['tan'])
     
+    # Генерируем таблицу амортизации
+    schedule = calculate_amortization_schedule(data['amount'], data['duration'], data['tan'])
+    data['amortization_table'] = generate_amortization_html(schedule)
+    
     html = fix_html_layout('contratto')
     return _generate_pdf_with_images(html, 'contratto', data)
 
@@ -199,6 +208,11 @@ def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> Byte
         if template_name in ['contratto', 'carta', 'garanzia', 'approvazione']:
             replacements = []
             if template_name == 'contratto':
+                # Calculate amortization summary
+                monthly_rate = (data['tan'] / 100) / 12
+                total_payments = data['payment'] * data['duration']
+                overpayment = total_payments - data['amount']
+
                 replacements = [
                     ('XXX', data['name']),  # имя клиента (первое)
                     ('XXX', format_money(data['amount'])),  # сумма кредита
@@ -210,52 +224,48 @@ def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> Byte
                     ('XXX', data['name']),  # имя в подписи
                 ]
 
-                # Пункт 6: Piano di ammortamento — подстановка плейсхолдеров и таблицы
-                monthly_rate = (data['tan'] / 100) / 12
-                total_payments = data['payment'] * data['duration']
-                overpayment = total_payments - data['amount']
-
-                html = html.replace('PAYMENT_SCHEDULE_MONTHLY_RATE', f"{monthly_rate:.12f}")
+                # Вставляем таблицу амортизации
+                html = html.replace('{{AMORTIZATION_TABLE}}', data.get('amortization_table', ''))
+                
+                # Вставляем данные для пункта 6
+                html = html.replace('PAYMENT_SCHEDULE_MONTHLY_RATE', f"{monthly_rate:.10f}")
                 html = html.replace('PAYMENT_SCHEDULE_MONTHLY_PAYMENT', f"&euro; {format_money(data['payment'])}")
                 html = html.replace('PAYMENT_SCHEDULE_TOTAL_PAYMENTS', f"&euro; {format_money(total_payments)}")
                 html = html.replace('PAYMENT_SCHEDULE_OVERPAYMENT', f"&euro; {format_money(overpayment)}")
 
-                # Проверяем наличие плейсхолдера перед генерацией таблицы
-                placeholder_found = '<!-- PAYMENT_SCHEDULE_TABLE_PLACEHOLDER -->' in html
-                print(f"🔍 Плейсхолдер таблицы платежей {'✅ найден' if placeholder_found else '❌ НЕ найден'} в HTML")
-                
-                payment_schedule_table = generate_payment_schedule_table(
-                    data['amount'],
-                    data['duration'],
-                    data['tan'],
-                    data['payment'],
-                )
-                
-                if placeholder_found:
-                    html = html.replace('<!-- PAYMENT_SCHEDULE_TABLE_PLACEHOLDER -->', payment_schedule_table)
-                    print(f"📊 Таблица платежей вставлена (размер таблицы: {len(payment_schedule_table)} символов)")
-                else:
-                    print("⚠️  Плейсхолдер таблицы не найден - таблица НЕ будет вставлена!")
-
                 # Добавляем класс к разделу 7 для принудительного разрыва страницы
                 import re
-                # Ищем параграф с "7. Firme" и ПРЕДЫДУЩУЮ пунктирную линию
+                html = re.sub(
+                    r'(<div style="page-break-before: always;"></div>)',
+                    r'',
+                    html
+                )
+                # Ищем параграф с "7. Firme" и добавляем разрыв страницы ПЕРЕД пунктирной линией
                 html = re.sub(
                     r'(<p class="c2">\s*<span class="c1">-{10,}</span>\s*</p>)(\s*<p class="c2">\s*<span class="c12 c6">7\. Firme</span>\s*</p>)',
                     r'<p class="c2 section-7-firme"><span class="c1">------------------------------------------</span></p>\2',
                     html
                 )
-                print("✅ Раздел 7 'Firme' (вместе с пунктирной линией) будет начинаться с новой страницы")
+                print("✅ Раздел 7 'Firme' будет начинаться с новой страницы")
 
-                # Таблица с подписями и печатью, вставляем после 7-го пункта
+                # Таблица с подписями и печатью, вставляем после таблицы с именами
                 signatures_table = generate_signatures_table()
-                html = html.replace('<!-- SIGNATURES_TABLE_PLACEHOLDER -->', signatures_table)
+                # Ищем закрывающий тег таблицы с именами и вставляем после него
+                html = re.sub(
+                    r'(</table>\s*<p class="c0">)',
+                    rf'</table>\n\n{signatures_table}\n\n<p class="c0">',
+                    html,
+                    count=1,
+                    flags=re.DOTALL
+                )
                 print("💉 Изображения подписей внедрены через signatures_table")
                 
-                # ПОСЛЕ вставки таблицы платежей - заменяем XXX на данные
+                # ПОСЛЕ вставки таблицы - заменяем XXX на данные
                 for old, new in replacements:
                     html = html.replace(old, new, 1)  # заменяем по одному
-
+                
+                # Уже обработали contratto, пропускаем общий блок замен
+                replacements = []
             elif template_name == 'carta':
                 replacements = [
                     ('XXX', data['name']),
@@ -472,18 +482,14 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             
             overlay_canvas.showPage()
             
-            # Страница 2 - добавляем logo.png
+            # Страница 2 и далее - добавляем только logo.png (подписи и печать теперь в HTML)
             overlay_canvas.drawImage("logo.png", x_71, y_71, 
                                    width=logo_scaled_width*mm, height=logo_scaled_height*mm,
                                    mask='auto', preserveAspectRatio=True)
-            overlay_canvas.showPage()
-            
-            # Для остальных страниц логотипа НЕ будет
                 
             overlay_canvas.save()
-            print("🖼️ Добавлены логотипы для contratto через ReportLab API (только стр 1 и 2)")
-            
-            # Печати и подписи теперь в HTML
+            print("🖼️ Добавлены логотипы для contratto через ReportLab API")
+            print("💉 Подписи и печать теперь в HTML-таблице, не через ReportLab")
         
         # Объединяем PDF с overlay
         overlay_buffer.seek(0)
@@ -617,7 +623,7 @@ def fix_html_layout(template_name='contratto'):
         border-collapse: collapse !important;
         border: none !important;
         background: transparent !important;
-        position: relative !important; /* Нижний слой */
+        position: relative !important;
         z-index: 10 !important;
     }
 
@@ -626,9 +632,9 @@ def fix_html_layout(template_name='contratto'):
         border-collapse: collapse !important;
         border: none !important;
         background: transparent !important;
-        position: absolute !important; /* Верхний слой */
+        position: absolute !important;
         top: 0 !important;
-        left: 25mm !important; /* Сдвиг вправо на ~3 клетки */
+        left: 25mm !important;
         z-index: 20 !important;
     }
 
@@ -646,7 +652,7 @@ def fix_html_layout(template_name='contratto'):
         margin-top: 0 !important;
     }
 
-    /* Печать - увеличена на 30% (75mm * 1.3 = 97.5mm) */
+    /* Печать - увеличена на 30% */
     .seal-img {
         display: block !important;
         margin: 0 auto !important;
@@ -656,7 +662,7 @@ def fix_html_layout(template_name='contratto'):
         height: auto !important;
     }
 
-    /* Подписи - увеличены на 60% (50mm * 1.6 = 80mm) */
+    /* Подписи - увеличены на 60% */
     .sing-img {
         display: block !important;
         margin: 0 auto !important;
