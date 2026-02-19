@@ -393,8 +393,8 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
                                    width=scaled_width*mm, height=scaled_height*mm, 
                                    mask='auto', preserveAspectRatio=True)
             
-            # Печать и подпись: для carta — на 3 клетки вниз от базовых (590→665, 693→768)
-            seal_cell = 665 if template_name == 'carta' else 590
+            # Печать и подпись: для carta — печать ещё на 3 клетки вниз (665→740), подпись 768
+            seal_cell = 740 if template_name == 'carta' else 590
             sign_cell = 768 if template_name == 'carta' else 593
             
             seal_img = Image.open("seal.png")
