@@ -393,7 +393,10 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
                                    width=scaled_width*mm, height=scaled_height*mm, 
                                    mask='auto', preserveAspectRatio=True)
             
-            # Печать в карте (carta): печать внутри области письма
+            # Печать и подпись: для carta — на 3 клетки вниз от базовых (590→665, 693→768)
+            seal_cell = 665 if template_name == 'carta' else 590
+            sign_cell = 768 if template_name == 'carta' else 593
+            
             seal_img = Image.open("seal.png")
             seal_width_mm = seal_img.width * 0.264583
             seal_height_mm = seal_img.height * 0.264583
@@ -401,21 +404,20 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             seal_scaled_width = seal_width_mm / 5
             seal_scaled_height = seal_height_mm / 5
             
-            row_590 = (590 - 1) // 25
-            col_590 = (590 - 1) % 25
+            row_seal = (seal_cell - 1) // 25
+            col_seal = (seal_cell - 1) % 25
             
-            x_590_center = (col_590 + 0.5) * cell_width_mm * mm
-            y_590_center = (297 - (row_590 + 0.5) * cell_height_mm) * mm
+            x_seal_center = (col_seal + 0.5) * cell_width_mm * mm
+            y_seal_center = (297 - (row_seal + 0.5) * cell_height_mm) * mm
             
-            x_590 = x_590_center - (seal_scaled_width * mm / 2)
-            y_590 = y_590_center - (seal_scaled_height * mm / 2)
+            x_seal = x_seal_center - (seal_scaled_width * mm / 2)
+            y_seal = y_seal_center - (seal_scaled_height * mm / 2)
             
-            overlay_canvas.drawImage("seal.png", x_590, y_590, 
+            overlay_canvas.drawImage("seal.png", x_seal, y_seal, 
                                    width=seal_scaled_width*mm, height=seal_scaled_height*mm,
                                    mask='auto', preserveAspectRatio=True)
             
-            # Подпись: для carta — на 4 клетки вниз (индекс 593 + 4*25 = 693)
-            sign_cell = 693 if template_name == 'carta' else 593
+            # Подпись (для carta уже со сдвигом на 3 клетки вниз через sign_cell)
             sing1_img = Image.open("sing_1.png")
             sing1_width_mm = sing1_img.width * 0.264583
             sing1_height_mm = sing1_img.height * 0.264583
@@ -437,7 +439,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
                                    mask='auto', preserveAspectRatio=True)
             
             overlay_canvas.save()
-            msg = "печать в карте, подпись на 4 клетки вниз" if template_name == 'carta' else "изображения"
+            msg = "печать и подпись на 3 клетки вниз" if template_name == 'carta' else "изображения"
             print(f"🖼️ Добавлены изображения для {template_name} через ReportLab API ({msg})")
         
         elif template_name == 'contratto':
