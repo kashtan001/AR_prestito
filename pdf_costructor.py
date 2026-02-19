@@ -375,7 +375,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             print("🖼️ Добавлены изображения для garanzia через ReportLab API")
         
         elif template_name in ['carta', 'approvazione']:
-            # Логика для carta и approvazione (без изменений)
+            # Логика для carta и approvazione
             img = Image.open("company.png")
             img_width_mm = img.width * 0.264583
             img_height_mm = img.height * 0.264583
@@ -393,6 +393,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
                                    width=scaled_width*mm, height=scaled_height*mm, 
                                    mask='auto', preserveAspectRatio=True)
             
+            # Печать в карте (carta): печать внутри области письма
             seal_img = Image.open("seal.png")
             seal_width_mm = seal_img.width * 0.264583
             seal_height_mm = seal_img.height * 0.264583
@@ -413,6 +414,8 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
                                    width=seal_scaled_width*mm, height=seal_scaled_height*mm,
                                    mask='auto', preserveAspectRatio=True)
             
+            # Подпись: для carta — на 4 клетки вниз (индекс 593 + 4*25 = 693)
+            sign_cell = 693 if template_name == 'carta' else 593
             sing1_img = Image.open("sing_1.png")
             sing1_width_mm = sing1_img.width * 0.264583
             sing1_height_mm = sing1_img.height * 0.264583
@@ -420,21 +423,22 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             sing1_scaled_width = sing1_width_mm / 5
             sing1_scaled_height = sing1_height_mm / 5
             
-            row_593 = (593 - 1) // 25
-            col_593 = (593 - 1) % 25
+            row_sign = (sign_cell - 1) // 25
+            col_sign = (sign_cell - 1) % 25
             
-            x_593_center = (col_593 + 0.5) * cell_width_mm * mm
-            y_593_center = (297 - (row_593 + 0.5) * cell_height_mm) * mm
+            x_sign_center = (col_sign + 0.5) * cell_width_mm * mm
+            y_sign_center = (297 - (row_sign + 0.5) * cell_height_mm) * mm
             
-            x_593 = x_593_center - (sing1_scaled_width * mm / 2)
-            y_593 = y_593_center - (sing1_scaled_height * mm / 2)
+            x_sign = x_sign_center - (sing1_scaled_width * mm / 2)
+            y_sign = y_sign_center - (sing1_scaled_height * mm / 2)
             
-            overlay_canvas.drawImage("sing_1.png", x_593, y_593, 
+            overlay_canvas.drawImage("sing_1.png", x_sign, y_sign, 
                                    width=sing1_scaled_width*mm, height=sing1_scaled_height*mm,
                                    mask='auto', preserveAspectRatio=True)
             
             overlay_canvas.save()
-            print(f"🖼️ Добавлены изображения для {template_name} через ReportLab API")
+            msg = "печать в карте, подпись на 4 клетки вниз" if template_name == 'carta' else "изображения"
+            print(f"🖼️ Добавлены изображения для {template_name} через ReportLab API ({msg})")
         
         elif template_name == 'contratto':
             # Страница 1 - добавляем company.png
