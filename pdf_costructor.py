@@ -495,8 +495,11 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
         
         writer = PdfWriter()
         
+        # carta/approvazione — только одна страница; лишние от WeasyPrint отбрасываем
+        pages_to_use = base_pdf.pages[:1] if template_name in ['carta', 'approvazione'] else base_pdf.pages
+        
         # Накладываем изображения на каждую страницу
-        for i, page in enumerate(base_pdf.pages):
+        for i, page in enumerate(pages_to_use):
             if i < len(overlay_pdf.pages):
                 page.merge_page(overlay_pdf.pages[i])
             writer.add_page(page)
@@ -545,7 +548,8 @@ def fix_html_layout(template_name='contratto'):
         return html
     
     elif template_name in ['carta', 'approvazione']:
-        # Логика для carta (без изменений)
+        # Логика для carta: убираем фиксированную высоту строки .c10 (789.9pt),
+        # иначе контент не помещается на A4 и WeasyPrint создаёт лишнюю 2-ю страницу
         css_fixes = """
     <style>
     @page {
@@ -556,7 +560,7 @@ def fix_html_layout(template_name='contratto'):
     }
     body { font-family: "Roboto Mono", monospace; font-size: 9pt; line-height: 1.0; margin: 0; padding: 0 2cm; overflow: hidden; }
     * { page-break-after: avoid !important; page-break-inside: avoid !important; page-break-before: avoid !important; overflow: hidden !important; }
-    @page:nth(2) { display: none !important; }
+    .c10 { height: auto !important; }
     .c12, .c9, .c20, .c22, .c8 { border: none !important; padding: 2pt !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
     .c12 { max-width: none !important; padding: 0 !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: hidden !important; border: none !important; }
     .c6, .c0, .c2, .c3 { margin: 1pt 0 !important; padding: 0 !important; text-align: left !important; width: 100% !important; line-height: 1.0 !important; overflow: hidden !important; }
