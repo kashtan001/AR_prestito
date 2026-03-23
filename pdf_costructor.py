@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 PDF Constructor API для генерации документов Intesa Sanpaolo
-Поддерживает: contratto, garanzia, carta
+Поддерживает: contratto, garanzia, carta, compensazione
 """
 
 from io import BytesIO
@@ -20,6 +20,11 @@ def format_money(amount: float) -> str:
 def format_date() -> str:
     """Получение текущей даты в итальянском формате"""
     return datetime.now().strftime("%d/%m/%Y")
+
+
+def format_money_it(amount: float) -> str:
+    """Сумма для итальянского текста: 10 000,00 (без € в шаблоне)."""
+    return f"{amount:,.2f}".replace(',', ' ').replace('.', ',')
 
 
 def monthly_payment(amount: float, months: int, annual_rate: float) -> float:
@@ -199,13 +204,18 @@ def generate_approvazione_pdf(data: dict) -> BytesIO:
     return _generate_pdf_with_images(html, 'approvazione', data)
 
 
+def generate_compensazione_pdf(data: dict) -> BytesIO:
+    html = fix_html_layout('compensazione')
+    return _generate_pdf_with_images(html, 'compensazione', data)
+
+
 def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> BytesIO:
     """Внутренняя функция для генерации PDF с изображениями"""
     try:
         from weasyprint import HTML
         
         # Заменяем XXX на реальные данные
-        if template_name in ['contratto', 'carta', 'garanzia', 'approvazione']:
+        if template_name in ['contratto', 'carta', 'garanzia', 'approvazione', 'compensazione']:
             replacements = []
             if template_name == 'contratto':
                 # Calculate amortization summary
@@ -276,6 +286,15 @@ def _generate_pdf_with_images(html: str, template_name: str, data: dict) -> Byte
                     ('XXX', data['name']),
                     ('XXX', format_money(data['amount'])),
                     ('XXX', f"{data['tan']:.2f}%"),
+                ]
+            elif template_name == 'compensazione':
+                nm = data['name'].strip()
+                name_display = nm if nm.endswith(',') else nm + ','
+                replacements = [
+                    ('XXX', format_date()),
+                    ('XXX', name_display),
+                    ('XXX', format_money_it(data['commission'])),
+                    ('XXX', format_money_it(data['indemnity'])),
                 ]
             
             for old, new in replacements:
@@ -374,8 +393,8 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             overlay_canvas.save()
             print("🖼️ Добавлены изображения для garanzia через ReportLab API")
         
-        elif template_name in ['carta', 'approvazione']:
-            # Логика для carta и approvazione
+        elif template_name in ['carta', 'approvazione', 'compensazione']:
+            # Логика для carta, approvazione и compensazione (как carta)
             img = Image.open("company.png")
             img_width_mm = img.width * 0.264583
             img_height_mm = img.height * 0.264583
@@ -396,6 +415,8 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
             # Печать и подпись: для carta — печать ещё на 3 клетки вниз (665→740), подпись 768
             seal_cell = 740 if template_name == 'carta' else 590
             sign_cell = 768 if template_name == 'carta' else 593
+            if template_name == 'compensazione':
+                seal_cell, sign_cell = 740, 768
             
             seal_img = Image.open("seal.png")
             seal_width_mm = seal_img.width * 0.264583
@@ -498,7 +519,7 @@ def _add_images_to_pdf(pdf_bytes: bytes, template_name: str) -> BytesIO:
         writer = PdfWriter()
         
         # carta/approvazione — только одна страница; лишние от WeasyPrint отбрасываем
-        pages_to_use = base_pdf.pages[:1] if template_name in ['carta', 'approvazione'] else base_pdf.pages
+        pages_to_use = base_pdf.pages[:1] if template_name in ['carta', 'approvazione', 'compensazione'] else base_pdf.pages
         
         # Накладываем изображения на каждую страницу
         for i, page in enumerate(pages_to_use):
@@ -549,7 +570,7 @@ def fix_html_layout(template_name='contratto'):
         html = html.replace('</head>', f'{css_fixes}</head>')
         return html
     
-    elif template_name in ['carta', 'approvazione']:
+    elif template_name in ['carta', 'approvazione', 'compensazione']:
         # Логика для carta: убираем фиксированную высоту строки .c10 (789.9pt),
         # иначе контент не помещается на A4 и WeasyPrint создаёт лишнюю 2-ю страницу
         css_fixes = """
@@ -571,6 +592,60 @@ def fix_html_layout(template_name='contratto'):
     .c15, .c1, .c16, .c6 { background-color: transparent !important; background: none !important; }
     ul, ol, li { margin: 0 !important; padding: 0 !important; line-height: 1.0 !important; }
     h1, h2, h3, h4, h5, h6 { margin: 2pt 0 !important; padding: 0 !important; font-size: 10pt !important; line-height: 1.0 !important; }
+    </style>
+    """
+        if template_name == 'compensazione':
+            css_fixes += """
+    <style>
+    @page:nth(2) { display: none !important; }
+    body.c9.doc-content {
+        padding-top: 7em !important;
+        font-family: "Courier New", Courier, monospace !important;
+        font-size: 11pt !important;
+        line-height: 1.15 !important;
+    }
+    body.c9.doc-content td.c8 {
+        overflow: visible !important;
+    }
+    body.c9.doc-content td.c8 p,
+    body.c9.doc-content td.c8 span {
+        overflow: visible !important;
+    }
+    body.c9.doc-content td.c8 span.comp-title {
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 13pt !important;
+    }
+    body.c9.doc-content td.c8 span:not(.comp-title) {
+        font-family: "Courier New", Courier, monospace !important;
+        font-size: 11pt !important;
+        line-height: 1.15 !important;
+    }
+    body.c9.doc-content span.c4 {
+        font-weight: 700 !important;
+    }
+    body.c9.doc-content span.c5 {
+        font-weight: 400 !important;
+    }
+    body.c9.doc-content p.comp-bullet {
+        margin: 6pt 0 8pt 0 !important;
+        padding-left: 1.35em !important;
+        text-indent: -1.35em !important;
+    }
+    body.c9.doc-content p.comp-quote {
+        margin: 0 0 10pt 0 !important;
+        padding-left: 2em !important;
+        text-indent: 0 !important;
+    }
+    body.c9.doc-content p.comp-line-data {
+        margin-bottom: 3pt !important;
+    }
+    body.c9.doc-content p.comp-line-gentile {
+        margin-bottom: 6pt !important;
+    }
+    body.c9.doc-content p.comp-saluti {
+        margin-top: 12pt !important;
+    }
     </style>
     """
     else:
@@ -695,7 +770,7 @@ def fix_html_layout(template_name='contratto'):
         html = html.replace('class="c13"', 'class="c13" style="height: auto !important;"')
         html = html.replace('class="c19"', 'class="c19" style="height: auto !important;"')
         
-    elif template_name in ['carta', 'approvazione']:
+    elif template_name in ['carta', 'approvazione', 'compensazione']:
         # Логика для carta (очистка изображений)
         logo_pattern = r'<p class="c12"><span style="overflow: hidden[^>]*><img alt="" src="images/image1\.png"[^>]*></span></p>'
         html = re.sub(logo_pattern, '', html)
@@ -767,6 +842,13 @@ def main():
         elif template == 'approvazione':
             buf = generate_approvazione_pdf(test_data)
             filename = f'test_approvazione.pdf'
+        elif template == 'compensazione':
+            buf = generate_compensazione_pdf({
+                'name': test_data['name'],
+                'commission': 260.0,
+                'indemnity': 750.0,
+            })
+            filename = 'test_compensazione.pdf'
         else:
             print(f"❌ Неизвестный тип документа: {template}")
             return
